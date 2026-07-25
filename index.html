@@ -126,6 +126,7 @@ h1,h2,h3{margin:0; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.02e
   width:132px; height:132px; border-radius:16px; object-fit:cover; background:var(--bg-elev-2);
   display:flex; align-items:center; justify-content:center; color:var(--text-faint); margin-bottom:8px;
   border:1px solid var(--glass-border);
+  font-family:'Space Grotesk',sans-serif;
 }
 .song-card .art svg{width:34px; height:34px;}
 .song-card .t{font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -139,6 +140,7 @@ h1,h2,h3{margin:0; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.02e
 .row-item .art-sm{
   width:50px; height:50px; border-radius:10px; object-fit:cover; background:var(--bg-elev-2); flex-shrink:0;
   display:flex; align-items:center; justify-content:center; color:var(--text-faint);
+  font-family:'Space Grotesk',sans-serif;
 }
 .row-item .art-sm svg{width:20px; height:20px;}
 .row-item .meta{min-width:0; flex:1;}
@@ -185,6 +187,7 @@ h1,h2,h3{margin:0; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.02e
   background:var(--bg-elev-2);
 }
 .pl-card .art4 img{width:100%; height:100%; object-fit:cover;}
+.pl-card .art4 .thumb-placeholder{display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-weight:700; color:rgba(255,255,255,0.85);}
 .pl-card .meta .t{font-size:15px; font-weight:600;}
 .pl-card .meta .s{font-size:12.5px; color:var(--text-dim); margin-top:2px;}
 .fab{
@@ -252,6 +255,7 @@ h1,h2,h3{margin:0; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.02e
   background:var(--bg-elev-2); display:flex; align-items:center; justify-content:center; color:var(--text-faint);
   box-shadow:10px 10px 22px var(--shadow-dk), -10px -10px 22px var(--shadow-lt);
   transition:transform .6s ease, border-radius .6s ease;
+  font-family:'Space Grotesk',sans-serif;
 }
 .player-art svg{width:64px; height:64px;}
 .player-art.playing{transform:scale(1.02); border-radius:50%;}
@@ -660,6 +664,77 @@ function idbGetMeta(key){
 }
 function idbSetMeta(key,value){ return idbPut('meta',{key,value}); }
 
+/* ---------------- Thumbnail Generator ---------------- */
+const thumbCache = new Map();
+
+function hashString(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++){ h = (h * 31 + str.charCodeAt(i)) & 0xFFFFFFFF; }
+  return h;
+}
+
+function generateThumbnail(song){
+  const key = song.id;
+  if(thumbCache.has(key)) return thumbCache.get(key);
+
+  const size = 200;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  const artist = song.artist || 'Unknown Artist';
+  const hash = hashString(artist);
+  const hue1 = Math.abs(hash % 360);
+  const hue2 = Math.abs((hash + 47) % 360);
+  const sat = 60 + Math.abs(hash % 20);
+  const light = 40 + Math.abs((hash >> 8) % 25);
+
+  const grad = ctx.createRadialGradient(40, 30, 15, 100, 100, 150);
+  grad.addColorStop(0, `hsl(${hue1}, ${sat}%, ${light + 20}%)`);
+  grad.addColorStop(0.6, `hsl(${hue1}, ${sat - 10}%, ${light}%)`);
+  grad.addColorStop(1, `hsl(${hue2}, ${sat - 15}%, ${light - 15}%)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // subtle pattern overlay
+  ctx.globalAlpha = 0.08;
+  for(let i=0;i<6;i++){
+    const cx = 20 + Math.abs(hash >> (i*3)) % 160;
+    const cy = 20 + Math.abs(hash >> (i*3+5)) % 160;
+    const r = 15 + Math.abs(hash >> (i*3+10)) % 40;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.fillStyle = i%2===0 ? '#fff' : '#000';
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // initial
+  const initial = artist.charAt(0).toUpperCase() || '?';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.2)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 4;
+
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.font = '700 76px "Space Grotesk", system-ui, -apple-system, sans-serif';
+  ctx.fillText(initial, size/2, size/2 + 4);
+
+  // small music note decoration
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 2;
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = '24px "Space Grotesk", system-ui, sans-serif';
+  ctx.fillText('♪', size - 36, size - 28);
+
+  const dataUrl = canvas.toDataURL('image/png');
+  thumbCache.set(key, dataUrl);
+  return dataUrl;
+}
+
 /* ---------------- Minimal ID3v2 tag parser ---------------- */
 function readSynchsafe(bytes){ return (bytes[0]<<21)|(bytes[1]<<14)|(bytes[2]<<7)|bytes[3]; }
 function parseID3(buf){
@@ -793,18 +868,45 @@ function fmtTime(sec){
 }
 
 function artUrlFor(song){
-  if(song && song.art){
+  if(!song) return null;
+  // Embedded album art takes priority
+  if(song.art){
     if(!song._artUrl) song._artUrl = URL.createObjectURL(song.art);
     return song._artUrl;
   }
-  return null;
+  // Generate a smart thumbnail on the fly
+  if(!song._thumbUrl){
+    song._thumbUrl = generateThumbnail(song);
+  }
+  return song._thumbUrl;
 }
+
 const NOTE_SVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
 
-function setArtEl(el, song, size){
+function setArtEl(el, song){
   const url = artUrlFor(song);
-  if(url){ el.style.backgroundImage=`url(${url})`; el.style.backgroundSize='cover'; el.style.backgroundPosition='center'; el.innerHTML=''; }
-  else { el.style.backgroundImage='none'; el.innerHTML = NOTE_SVG; }
+  if(url){
+    el.style.backgroundImage=`url(${url})`;
+    el.style.backgroundSize='cover';
+    el.style.backgroundPosition='center';
+    el.innerHTML='';
+  } else {
+    el.style.backgroundImage='none';
+    el.innerHTML = NOTE_SVG;
+  }
+}
+
+function setArtElWithText(el, song, text){
+  const url = artUrlFor(song);
+  if(url){
+    el.style.backgroundImage=`url(${url})`;
+    el.style.backgroundSize='cover';
+    el.style.backgroundPosition='center';
+    el.innerHTML='';
+  } else {
+    el.style.backgroundImage='none';
+    el.innerHTML = text || NOTE_SVG;
+  }
 }
 
 function currentSong(){
@@ -1030,8 +1132,15 @@ function emptyStateHTML(icon,title,text,btnLabel){
 
 function songCardHTML(s){
   const url = artUrlFor(s);
+  if(url){
+    return `<div class="song-card">
+      <div class="art" style="background-image:url(${url});background-size:cover;background-position:center;"></div>
+      <div class="t">${escapeHtml(s.title)}</div>
+      <div class="a">${escapeHtml(s.artist)}</div>
+    </div>`;
+  }
   return `<div class="song-card">
-    <div class="art" style="${url?`background-image:url(${url});background-size:cover;background-position:center;`:''}">${url?'':NOTE_SVG}</div>
+    <div class="art">${NOTE_SVG}</div>
     <div class="t">${escapeHtml(s.title)}</div>
     <div class="a">${escapeHtml(s.artist)}</div>
   </div>`;
@@ -1041,7 +1150,12 @@ function rowItemHTML(s, showEq){
   const url = artUrlFor(s);
   const isCurrent = currentSong() && currentSong().id===s.id;
   const eq = (isCurrent && !audioEl.paused) ? eqIconHTML() : '';
-  return `<div class="art-sm" style="${url?`background-image:url(${url});background-size:cover;background-position:center;`:''}">${url?'':NOTE_SVG}</div>
+  if(url){
+    return `<div class="art-sm" style="background-image:url(${url});background-size:cover;background-position:center;"></div>
+      <div class="meta"><div class="t">${escapeHtml(s.title)}</div><div class="s">${escapeHtml(s.artist)}</div></div>
+      ${eq || `<div class="dur">${fmtTime(s.duration)}</div>`}`;
+  }
+  return `<div class="art-sm">${NOTE_SVG}</div>
     <div class="meta"><div class="t">${escapeHtml(s.title)}</div><div class="s">${escapeHtml(s.artist)}</div></div>
     ${eq || `<div class="dur">${fmtTime(s.duration)}</div>`}`;
 }
@@ -1157,7 +1271,7 @@ function renderPlaylists(){
     const songs = p.songIds.map(id=>state.songs.find(s=>s.id===id)).filter(Boolean);
     const thumbs = songs.slice(0,4);
     return `<div class="pl-card glass" data-id="${p.id}">
-      <div class="art4">${thumbs.map(s=>{ const u=artUrlFor(s); return u?`<img src="${u}">`:`<div style="background:var(--bg-elev-2);display:flex;align-items:center;justify-content:center;color:var(--text-faint);">${NOTE_SVG}</div>`; }).join('') || `<div style="grid-column:1/3;grid-row:1/3;background:var(--bg-elev-2);display:flex;align-items:center;justify-content:center;color:var(--text-faint);">${NOTE_SVG}</div>`}</div>
+      <div class="art4">${thumbs.map(s=>{ const u=artUrlFor(s); return u?`<img src="${u}">`:`<div class="thumb-placeholder" style="background:var(--bg-elev-2);">${NOTE_SVG}</div>`; }).join('') || `<div style="grid-column:1/3;grid-row:1/3;background:var(--bg-elev-2);display:flex;align-items:center;justify-content:center;color:var(--text-faint);">${NOTE_SVG}</div>`}</div>
       <div class="meta"><div class="t">${escapeHtml(p.name)}</div><div class="s">${songs.length} song${songs.length!==1?'s':''}</div></div>
     </div>`;
   }).join('');
