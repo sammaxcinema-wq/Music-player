@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>PulseMusic</title>
+<title>HarmoniX</title>
 <meta name="theme-color" content="#070b0a">
 <meta name="description" content="Your music, your library, no cloud required.">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23070b0a'/%3E%3Cpath d='M20 55 L32 55 L38 30 L46 72 L54 42 L60 60 L68 55 L80 55' stroke='%2314e0a1' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -343,7 +343,7 @@ h1,h2,h3{margin:0; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.02e
   <!-- HOME -->
   <section class="screen active" id="screen-home">
     <div class="hero-card glass">
-      <div class="hero-eyebrow">Pulse Music</div>
+      <div class="hero-eyebrow">HarmoniX</div>
       <div class="hero-greeting" id="greetingText">Good evening</div>
       <div class="hero-stat-row">
         <div class="hero-stat"><b id="statSongs">0</b><span>Songs</span></div>
@@ -419,7 +419,7 @@ h1,h2,h3{margin:0; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.02e
   <!-- SETTINGS -->
   <section class="screen" id="screen-settings">
     <h1 class="page-title">Settings</h1>
-    <p class="page-sub">Make Pulse yours</p>
+    <p class="page-sub">Make HarmoniX yours</p>
 
     <div class="settings-group glass" style="padding:6px 14px;">
       <div class="settings-row">
@@ -453,12 +453,12 @@ h1,h2,h3{margin:0; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.02e
 
     <div class="settings-group glass" style="padding:6px 14px;">
       <div class="settings-row" id="rowInstall">
-        <div class="l">Install Pulse<span class="sub">Add to your home screen</span></div>
+        <div class="l">Install HarmoniX<span class="sub">Add to your home screen</span></div>
         <div class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v13m0 0l-4-4m4 4l4-4M5 21h14"/></svg></div>
       </div>
     </div>
 
-    <p style="text-align:center; color:var(--text-faint); font-size:12px; margin-top:26px;">PulseMusic · plays entirely on this device</p>
+    <p style="text-align:center; color:var(--text-faint); font-size:12px; margin-top:26px;">HarmoniX · plays entirely on this device</p>
   </section>
 
   <!-- BOTTOM NAV -->
@@ -548,7 +548,7 @@ h1,h2,h3{margin:0; font-family:'Space Grotesk',sans-serif; letter-spacing:-0.02e
 "use strict";
 
 /* ============================================================
-   PulseMusic — self-contained PWA music player
+   HarmoniX — self-contained PWA music player
    Storage: IndexedDB (song blobs, album art, playlists)
    ============================================================ */
 
@@ -564,7 +564,7 @@ let state = {
   queue:[], queueIndex:-1,
   currentScreen:'home',
   libTab:'songs',
-  shuffle:false, repeat:'off', // off|all|one
+  shuffle:false, repeat:'off',
   playerOpen:false,
   currentPlaylistId:null,
   reduceMotion:false,
@@ -639,7 +639,7 @@ function parseID3(buf){
     const flags = view.getUint8(5);
     const size = readSynchsafe([view.getUint8(6),view.getUint8(7),view.getUint8(8),view.getUint8(9)]);
     let offset = 10;
-    if(flags & 0x40){ offset += 4; } // extended header, skip roughly
+    if(flags & 0x40){ offset += 4; }
     const end = 10 + size;
     const isV24 = ver >= 4;
     while(offset < end - 10 && offset < buf.byteLength - 10){
@@ -664,7 +664,7 @@ function parseID3(buf){
         while(mimeEnd < frameStart+frameSize && view.getUint8(mimeEnd)!==0) mimeEnd++;
         const mime = new TextDecoder('latin1').decode(new Uint8Array(buf, p, mimeEnd-p)) || 'image/jpeg';
         p = mimeEnd+1;
-        p += 1; // picture type byte
+        p += 1;
         let descEnd = p;
         while(descEnd < frameStart+frameSize-1 && !(view.getUint8(descEnd)===0)) descEnd++;
         p = descEnd+1;
@@ -675,7 +675,7 @@ function parseID3(buf){
       }
       offset = frameStart + frameSize;
     }
-  }catch(err){ /* best-effort parse; fall back to filename below */ }
+  }catch(err){ /* best-effort */ }
   return out;
 }
 function decodeText(buf, start, len, encByte){
@@ -785,6 +785,7 @@ function playSongList(list, index, label){
   state.queueIndex = index;
   state.playerFromLabel = label || 'Now Playing';
   loadAndPlay();
+  if(state.currentScreen === 'home') renderHome();
 }
 
 function loadAndPlay(){
@@ -848,7 +849,8 @@ function updatePlayButtons(){
   renderMiniPlayer();
   if(state.playerOpen) renderPlayerScreen(false);
   runVisualizer(playing);
-  renderLibraryList(); // refresh eq icons
+  renderLibraryList();
+  if(state.currentScreen === 'home') renderContinueRow();
 }
 
 function updateProgressUI(){
@@ -880,7 +882,7 @@ function renderMiniPlayer(){
   setArtEl($('#mpArt'), song);
 }
 
-/* ---------------- Visualizer (signature element: Pulse Ring) ---------------- */
+/* ---------------- Visualizer ---------------- */
 const canvas = document.getElementById('visCanvas');
 const ctx2d = canvas.getContext('2d');
 let rafId=null;
@@ -941,6 +943,27 @@ $$('.nav-item').forEach(item=>{
 });
 
 /* ---------------- Home ---------------- */
+function renderContinueRow(){
+  const song = currentSong();
+  const homeContinue = $('#homeContinue');
+  const row = $('#continueRow');
+  if(song && state.songs.length){
+    homeContinue.style.display='block';
+    const url = artUrlFor(song);
+    const isCurrent = true;
+    const playing = !audioEl.paused && !audioEl.ended;
+    const eq = (isCurrent && playing) ? eqIconHTML() : '';
+    row.innerHTML = `
+      <div class="art-sm" style="${url?`background-image:url(${url});background-size:cover;background-position:center;`:''}">${url?'':NOTE_SVG}</div>
+      <div class="meta"><div class="t">${escapeHtml(song.title)}</div><div class="s">${escapeHtml(song.artist)}</div></div>
+      ${eq || `<div class="dur">${fmtTime(song.duration)}</div>`}
+    `;
+    row.onclick = openPlayer;
+  } else {
+    homeContinue.style.display='none';
+  }
+}
+
 function renderHome(){
   const hour = new Date().getHours();
   $('#greetingText').textContent = hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
@@ -948,14 +971,12 @@ function renderHome(){
   $('#statAlbums').textContent = new Set(state.songs.map(s=>s.album)).size;
   $('#statPlaylists').textContent = state.playlists.length;
 
-  const recentScroll = $('#recentScroll');
   const homeRecent = $('#homeRecent');
   const homeEmpty = $('#homeEmpty');
-  const homeContinue = $('#homeContinue');
 
   if(!state.songs.length){
     homeRecent.style.display='none';
-    homeContinue.style.display='none';
+    $('#homeContinue').style.display='none';
     homeEmpty.style.display='block';
     homeEmpty.innerHTML = emptyStateHTML('library','Your library is empty','Import songs from this device to start listening.','Add music');
     $('#homeEmpty .empty-btn')?.addEventListener('click', triggerImport);
@@ -965,18 +986,11 @@ function renderHome(){
   homeRecent.style.display='block';
 
   const recent = state.songs.slice().sort((a,b)=>b.addedAt-a.addedAt).slice(0,12);
-  recentScroll.innerHTML = recent.map(s=>songCardHTML(s)).join('');
+  const scroll = $('#recentScroll');
+  scroll.innerHTML = recent.map(s=>songCardHTML(s)).join('');
   $$('#recentScroll .song-card').forEach((el,i)=> el.addEventListener('click', ()=>playSongList(recent, i, 'Recently Added')));
 
-  const song = currentSong();
-  if(song){
-    homeContinue.style.display='block';
-    const row = $('#continueRow');
-    row.innerHTML = rowItemHTML(song, false);
-    row.onclick = openPlayer;
-  } else {
-    homeContinue.style.display='none';
-  }
+  renderContinueRow();
 }
 
 function emptyStateHTML(icon,title,text,btnLabel){
@@ -1000,7 +1014,8 @@ function songCardHTML(s){
 function rowItemHTML(s, showEq){
   const url = artUrlFor(s);
   const isCurrent = currentSong() && currentSong().id===s.id;
-  const eq = (isCurrent && !audioEl.paused) ? eqIconHTML() : '';
+  const playing = isCurrent && !audioEl.paused && !audioEl.ended;
+  const eq = (isCurrent && playing) ? eqIconHTML() : '';
   return `<div class="art-sm" style="${url?`background-image:url(${url});background-size:cover;background-position:center;`:''}">${url?'':NOTE_SVG}</div>
     <div class="meta"><div class="t">${escapeHtml(s.title)}</div><div class="s">${escapeHtml(s.artist)}</div></div>
     ${eq || `<div class="dur">${fmtTime(s.duration)}</div>`}`;
@@ -1171,7 +1186,7 @@ function renderPlaylistDetail(){
   });
 }
 document.getElementById('screen-playlist-detail').addEventListener('renderme', renderPlaylistDetail);
-// hook into showScreen for playlist-detail
+
 const _origShowScreen = showScreen;
 showScreen = function(name){
   _origShowScreen(name);
@@ -1308,7 +1323,6 @@ $('#btnPlayerMenu').addEventListener('click', ()=>{
 });
 
 function renderPlayerScreen(runVis){
-  // playback UI already synced via updateNowPlayingUI/updatePlayButtons
   if(runVis!==false) runVisualizer(!audioEl.paused);
 }
 
@@ -1384,7 +1398,7 @@ function showToast(msg){
   toastTimer = setTimeout(()=>els.toast.classList.remove('show'), 2200);
 }
 
-/* ---------------- Drag & drop import (desktop convenience) ---------------- */
+/* ---------------- Drag & drop import ---------------- */
 document.addEventListener('dragover', (e)=>e.preventDefault());
 document.addEventListener('drop', (e)=>{
   e.preventDefault();
@@ -1427,7 +1441,7 @@ function registerServiceWorker(){
 function injectManifest(){
   const icon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23070b0a'/%3E%3Cpath d='M20 55 L32 55 L38 30 L46 72 L54 42 L60 60 L68 55 L80 55' stroke='%2314e0a1' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E";
   const manifest = {
-    name:"PulseMusic", short_name:"Pulse", start_url:".", display:"standalone",
+    name:"HarmoniX", short_name:"HarmoniX", start_url:".", display:"standalone",
     background_color:"#070b0a", theme_color:"#070b0a",
     icons:[{src:icon, sizes:"any", type:"image/svg+xml"}]
   };
